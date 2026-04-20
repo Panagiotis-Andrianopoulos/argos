@@ -1,0 +1,157 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# ============================================================
+# Secrets and local config
+# ============================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.yaml
+secrets.yml
+
+# ============================================================
+# Testing and coverage
+# ============================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ============================================================
+# Type checking and linting caches
+# ============================================================
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+
+# ============================================================
+# Jupyter
+# ============================================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ============================================================
+# IDEs and editors
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Data and models (usually too large for git)
+# ============================================================
+data/raw/
+data/processed/
+data/interim/
+data/external/
+*.csv
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.joblib
+models/*.pkl
+models/*.pt
+models/*.bin
+
+# But keep example/sample data
+!data/samples/
+!data/*.sample.csv
+
+# ============================================================
+# MLflow
+# ============================================================
+mlruns/
+mlartifacts/
+
+# ============================================================
+# Airflow
+# ============================================================
+airflow/logs/
+airflow/plugins/__pycache__/
+airflow.db
+airflow.cfg
+webserver_config.py
+
+# ============================================================
+# dbt
+# ============================================================
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# ============================================================
+# Docker
+# ============================================================
+.docker/
+
+# ============================================================
+# Terraform (if used later)
+# ============================================================
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# ============================================================
+# Logs and databases
+# ============================================================
+*.log
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# Misc
+# ============================================================
+.cache/
+tmp/
+temp/
+scratch/

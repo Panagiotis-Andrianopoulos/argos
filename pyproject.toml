@@ -1,0 +1,27 @@
+[project]
+name = "argos"
+version = "0.1.0"
+description = "Real estate intelligence platform for the Greek market: live listings, objective values and fair-price forecasting."
+readme = "README.md"
+authors = [
+    { name = "Panagiotis-Andriano", email = "panagiotis.andrianopoulos23@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+license = { text = "MIT" }
+keywords = ["real-estate", "machine-learning", "data-engineering", "greece", "analytics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.scripts]
+argos = "argos:main"
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
