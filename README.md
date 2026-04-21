@@ -76,11 +76,14 @@ python -c "import argos; print(argos.__version__)"
 
 ## Project status
 
-**Current milestone:** Foundation (Week 1 of 6)
+**Current milestone:** Foundation
 
 - [x] Project scaffold
-- [x] Package configuration
-- [ ] Docker Compose stack
+- [x] Code quality tooling (ruff, mypy, pre-commit)
+- [x] Type-safe configuration
+- [x] Docker Compose stack (Postgres, MinIO, MLflow, pgAdmin)
+- [x] Database schema with Alembic migrations
+- [x] CI/CD with GitHub Actions
 - [ ] Data ingestion layer
 - [ ] dbt transformations
 - [ ] ML training pipeline
