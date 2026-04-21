@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)]()
+[![CI](https://github.com/Panagiotis-Andrianopoulos/argos/actions/workflows/ci.yml/badge.svg)](https://github.com/Panagiotis-Andrianopoulos/argos/actions/workflows/ci.yml)
 
 ---
 
