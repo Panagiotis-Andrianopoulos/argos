@@ -1,0 +1,103 @@
+# ============================================================
+# ARGOS — Continuous Integration
+# ============================================================
+# ARGOS — Continuous Integration
+# ============================================================
+# Runs on every push and pull request to the main branch.
+# Two jobs:
+#   - quality-checks: ruff, mypy, pre-commit
+#   - migrations:     sets up Postgres and runs Alembic upgrade
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel previous runs if a new push is made to the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # --------------------------------------------------------
+  # Job 1: Code quality checks
+  # --------------------------------------------------------
+  quality-checks:
+    name: Lint, format, type check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  # --------------------------------------------------------
+  # Job 2: Migrations validation
+  # --------------------------------------------------------
+  migrations:
+    name: Validate Alembic migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: argos
+          POSTGRES_USER: argos
+          POSTGRES_PASSWORD: argos_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ARGOS_DB_HOST: localhost
+      ARGOS_DB_PORT: 5432
+      ARGOS_DB_NAME: argos
+      ARGOS_DB_USER: argos
+      ARGOS_DB_PASSWORD: argos_ci_password
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Alembic upgrade
+        run: uv run alembic upgrade head
+
+      - name: Verify schema is up-to-date
+        run: |
+          uv run alembic check || (echo "::error::Models drift from migrations!" && exit 1)
