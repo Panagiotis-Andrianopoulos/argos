@@ -155,3 +155,8 @@ logs/
 tmp/
 temp/
 scratch/
+
+# ============================================================
+# Alembic
+# ============================================================
+# (Nothing specific to ignore — versions/ MUST be committed)

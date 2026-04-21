@@ -123,10 +123,19 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Full Postgres URL for SQLAlchemy/asyncpg."""
+        """Async Postgres URL (asyncpg driver)for SQLAlchemy."""
         password = self.db_password.get_secret_value()
         return (
-            f"postgresql://{self.db_user}:{password}"
+            f"postgresql+asyncpg://{self.db_user}:{password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
+
+    @property
+    def database_url_sync(self) -> str:
+        """Sync Postgres URL (psycopg driver) for non-async contexts."""
+        password = self.db_password.get_secret_value()
+        return (
+            f"postgresql+psycopg://{self.db_user}:{password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 

@@ -19,7 +19,7 @@ from argos.config import settings
 def _create_engine() -> Engine:
     """Creates the SQLAlchemy engine from the settings."""
     return create_engine(
-        settings.database_url,
+        settings.database_url_sync,
         echo=False,  # True to see every SQL statement in stdout
         pool_pre_ping=True,  # checks connection health
         pool_size=5,

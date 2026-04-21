@@ -39,7 +39,7 @@ repos:
           - "pydantic-settings>=2"
           - "sqlalchemy>=2"
           - "psycopg[binary]"
-        exclude: ^(tests/|notebooks/|dbt/)
+        exclude: ^(tests/|notebooks/|dbt/|alembic/)
 
   # --- Conventional Commits validation ---
   - repo: https://github.com/compilerla/conventional-pre-commit
