@@ -1,8 +1,6 @@
 # ============================================================
 # ARGOS — Continuous Integration
 # ============================================================
-# ARGOS — Continuous Integration
-# ============================================================
 # Runs on every push and pull request to the main branch.
 # Two jobs:
 #   - quality-checks: ruff, mypy, pre-commit

@@ -83,9 +83,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # --- Application ---
     env: Environment = Field(default=Environment.DEV, description="Deployment environment.")
     log_level: LogLevel = Field(default=LogLevel.INFO, description="Python logging level.")
 
+    # --- Postgres Database ---
     db_host: str = Field(default="localhost", description="Postgres host")
     db_port: int = Field(default=5432, ge=1, le=65535, description="Postgres port.")
     db_name: str = Field(default="argos", description="Database name.")
@@ -95,6 +97,7 @@ class Settings(BaseSettings):
         description="Database password. Wrapped in SecretStr.",
     )
 
+    # --- Object Storage ---
     s3_endpoint_url: str = Field(
         default="http://localhost:9000",
         description="S3 endpoint (MinIO local or R2 production).",
@@ -110,11 +113,23 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="argos-data", description="Bucket name.")
     s3_region: str = Field(default="auto", description="S3 region.")
 
+    # --- MLflow ---
     mlflow_tracking_url: str = Field(
         default="http://localhost:5000",
         description="MLflow tracking server URI.",
     )
 
+    # --- FRED API ---
+    fred_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="FRED API key (https://fred.stlouisfed.org/).",
+    )
+    fred_base_url: str = Field(
+        default="https://api.stlouisfed.org/fred",
+        description="Base URL του FRED API.",
+    )
+
+    # --- Nested groups ---
     scraper: ScraperSettings = Field(default_factory=ScraperSettings)
 
     # ============================================================

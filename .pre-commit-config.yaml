@@ -39,6 +39,8 @@ repos:
           - "pydantic-settings>=2"
           - "sqlalchemy>=2"
           - "psycopg[binary]"
+          - "httpx"
+          - "tenacity"
         exclude: ^(tests/|notebooks/|dbt/|alembic/)
 
   # --- Conventional Commits validation ---
