@@ -49,11 +49,23 @@ class Series(BaseModel):
     @field_validator("last_updated", mode="before")
     @classmethod
     def _parse_fred_datetime(cls, v: str | datetime) -> datetime:
-        """The FRED returns '2025-11-25 08:51:03-06' — parse manually."""
+        """Parse a datetime string from FRED or from a round-tripped JSON.
+
+        FRED sends values like "2025-12-30 11:03:27-06" (space separator,
+        short timezone). When we dump to JSON and read back, Pydantic uses
+        ISO 8601 format like "2025-12-30T11:03:27-06:00" (T separator,
+        full timezone).
+
+        This validator handles both.
+        """
         if isinstance(v, datetime):
             return v
-        # Format: "YYYY-MM-DD HH:MM:SS-TZ" (tz value like "-06")
-        # Python expects "-0600" format, so we pad it
+
+        try:
+            return datetime.fromisoformat(v)
+        except ValueError:
+            pass
+
         if len(v) > 19 and v[-3] in ("-", "+"):
             v = v + "00"  # "-06" → "-0600"
         return datetime.strptime(v, "%Y-%m-%d %H:%M:%S%z")

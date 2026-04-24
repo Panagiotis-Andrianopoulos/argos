@@ -41,6 +41,7 @@ repos:
           - "psycopg[binary]"
           - "httpx"
           - "tenacity"
+          - "boto3-stubs[s3]"
         exclude: ^(tests/|notebooks/|dbt/|alembic/)
 
   # --- Conventional Commits validation ---
