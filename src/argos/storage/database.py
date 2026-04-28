@@ -1,6 +1,6 @@
-"""Database engine και session management.
+"""Database engine and session management.
 
-Εκθέτει:
+Exposes:
 - `engine` — the SQLAlchemy engine (connection pool)
 - `SessionLocal` — factory for sessions
 - `get_session()` — context manager for use in scripts
