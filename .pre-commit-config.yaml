@@ -42,6 +42,7 @@ repos:
           - "httpx"
           - "tenacity"
           - "boto3-stubs[s3]"
+          - "pytest"
         exclude: ^(tests/|notebooks/|dbt/|alembic/)
 
   # --- Conventional Commits validation ---

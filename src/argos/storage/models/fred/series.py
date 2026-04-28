@@ -36,7 +36,7 @@ class FredSeries(TimestampMixin, Base):
     units_short: Mapped[str] = mapped_column(String(50), nullable=False)
     seasonal_adjustment: Mapped[str] = mapped_column(String(100), nullable=False)
     seasonal_adjustment_short: Mapped[str] = mapped_column(String(10), nullable=False)
-    notes: Mapped[str] = mapped_column(String)
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
 
     observation_start: Mapped[date] = mapped_column(nullable=False)
     observation_end: Mapped[date] = mapped_column(nullable=False)

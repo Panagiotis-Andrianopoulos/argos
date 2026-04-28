@@ -40,6 +40,9 @@ dev = [
     "boto3-stubs[s3]>=1.42.93",
     "mypy>=1.20.1",
     "pre-commit>=4.5.1",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
     "ruff>=0.15.11",
 ]
 
@@ -112,3 +115,27 @@ module = [
     "airflow.*",
 ]
 ignore_missing_imports = true
+
+# ============================================================
+# Pytest configuration
+# ============================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+    "--showlocals",
+]
+markers = [
+    "integration: tests that require external services (Postgres, MinIO)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pydantic",
+    "ignore::DeprecationWarning:botocore",
+]
