@@ -1,0 +1,16 @@
+# ============================================================
+# Custom Airflow image for ARGOS
+# ============================================================
+# Extends the official Airflow 3.2.1 image with the one runtime
+# dependency that argos needs and Airflow does not already bundle:
+# psycopg (psycopg3) for the SQLAlchemy 2.x sync/async drivers used
+# by argos.storage.database.
+#
+# All other argos deps (pydantic-settings, httpx, boto3, sqlalchemy,
+# tenacity, alembic) come transitively from apache-airflow itself.
+# ============================================================
+
+FROM apache/airflow:3.2.1
+
+USER airflow
+RUN pip install --no-cache-dir "psycopg[binary]>=3.3.3"
