@@ -43,7 +43,7 @@ repos:
           - "tenacity"
           - "boto3-stubs[s3]"
           - "pytest"
-        exclude: ^(tests/|notebooks/|dbt/|alembic/)
+        exclude: ^(tests/|notebooks/|dbt/|alembic/|airflow/)
 
   # --- Conventional Commits validation ---
   - repo: https://github.com/compilerla/conventional-pre-commit
