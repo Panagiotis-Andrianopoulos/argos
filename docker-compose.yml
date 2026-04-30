@@ -9,6 +9,43 @@
 # Full reset: docker compose down -v  (deletes volumes!)
 # ============================================================
 
+# ============================================================
+# Common Airflow configuration (YAML anchor — reused by all Airflow services)
+# ============================================================
+x-airflow-common: &airflow-common
+  image: apache/airflow:3.2.1
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__FERNET_KEY: ${ARGOS_AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://argos-airflow-api-server:8080/execution/"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${ARGOS_DB_USER:-argos}:${ARGOS_DB_PASSWORD:-change_me_in_real_env}@postgres:5432/${ARGOS_AIRFLOW_DB_NAME:-airflow}
+    AIRFLOW__API__BASE_URL: "http://localhost:8080"
+    AIRFLOW__API_AUTH__JWT_SECRET: ${ARGOS_AIRFLOW_FERNET_KEY}
+    PYTHONPATH: /opt/airflow/src
+    PIP_ADDITIONAL_REQUIREMENTS: >-
+      pydantic-settings>=2.14.0
+      sqlalchemy>=2.0.49
+      psycopg[binary]>=3.3.3
+      asyncpg>=0.31.0
+      httpx>=0.28.1
+      boto3>=1.42.93
+      tenacity>=9.1.4
+      alembic>=1.18.4
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - airflow_logs:/opt/airflow/logs
+    - ./src:/opt/airflow/src
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+  networks:
+    - argos-net
+
 services:
 
   # --------------------------------------------------------
@@ -104,23 +141,96 @@ services:
       - argos-net
 
   # --------------------------------------------------------
-  # pgAdmin — Postgres web UI (optional)
+  # Airflow init — one-shot DB migration + admin user creation
   # --------------------------------------------------------
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: argos-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@argos.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: "False"
+  airflow-init:
+    <<: *airflow-common
+    container_name: argos-airflow-init
+    entrypoint: >
+      /bin/bash -c "
+      PGPASSWORD=${ARGOS_DB_PASSWORD:-change_me_in_real_env} psql -h postgres -U ${ARGOS_DB_USER:-argos} -d ${ARGOS_DB_NAME:-argos} -tc \"SELECT 1 FROM pg_database WHERE datname='${ARGOS_AIRFLOW_DB_NAME:-airflow}'\" | grep -q 1 || PGPASSWORD=${ARGOS_DB_PASSWORD:-change_me_in_real_env} psql -h postgres -U ${ARGOS_DB_USER:-argos} -d ${ARGOS_DB_NAME:-argos} -c \"CREATE DATABASE ${ARGOS_AIRFLOW_DB_NAME:-airflow}\";
+      airflow db migrate &&
+      airflow users create --username ${ARGOS_AIRFLOW_ADMIN_USER:-admin} --firstname admin --lastname admin --role Admin --email admin@argos.local --password ${ARGOS_AIRFLOW_ADMIN_PASSWORD:-admin} || true;
+      "
+    restart: "no"
+
+  # --------------------------------------------------------
+  # Airflow API server — UI + REST API at localhost:8080
+  # --------------------------------------------------------
+  airflow-api-server:
+    <<: *airflow-common
+    container_name: argos-airflow-api-server
+    command: api-server
     ports:
-      - "5050:80"
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - argos-net
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # --------------------------------------------------------
+  # Airflow scheduler — orchestrates task execution
+  # --------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: argos-airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # --------------------------------------------------------
+  # Airflow DAG processor — parses DAG files (separated in 3.x)
+  # --------------------------------------------------------
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: argos-airflow-dag-processor
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # --------------------------------------------------------
+  # Airflow triggerer — runs deferred async tasks
+  # --------------------------------------------------------
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: argos-airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 
 # ============================================================
 # Volumes — persistent data outside of containers
@@ -130,6 +240,8 @@ volumes:
     name: argos-pgdata
   miniodata:
     name: argos-miniodata
+  airflow_logs:
+    name: argos-airflow-logs
 
 # ============================================================
 # Networks — internal bridge network
