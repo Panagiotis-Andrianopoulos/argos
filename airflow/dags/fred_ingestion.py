@@ -14,13 +14,21 @@ Architecture decisions:
   Data lives in MinIO between tasks. This scales regardless of dataset size.
 - Idempotent by construction: MinIO writes are date-partitioned (same key
   on same day), and Postgres upserts use ON CONFLICT DO UPDATE.
+
+Schedule rationale:
+- Source dataset (BIS/FRED) updates quarterly.
+- Monthly schedule (1st of month) gives ~3 runs per update cycle —
+  enough to catch revisions and recover from a single failed run
+  without hammering the upstream API.
+- 06:00 UTC = early morning Athens, leaves the workday for fixes
+  if something breaks overnight.
 """
 
 # pyright: reportMissingImports=false
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from airflow.sdk import dag, task
@@ -33,24 +41,25 @@ if TYPE_CHECKING:
     dag_id="fred_ingestion",
     description="Daily ingestion of FRED economic indicator for the Greek market",
     start_date=datetime(2026, 4, 1),
-    schedule=None,
+    schedule="0 6 1 * 1",  # 1st of each month, 06:00 UTC
     catchup=False,
+    max_active_runs=1,
     tags=["ingestion", "fred"],
     default_args={
         "owner": "argos",
-        "retries": 0,
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+        "retry_exponential_backoff": True,
+        "max_retry_delay": timedelta(hours=1),
     },
+    dagrun_timeout=timedelta(minutes=15),
 )
 def fred_ingestion() -> None:
     """Ingest Greek residential property price index from FRED."""
 
     @task
     def fetch_and_archive() -> dict[str, str]:
-        """Hit FRED API and archive the response to MinIO.
-
-        Returns the MinIO key so downstream tasks can read the snapshot
-        without re-hitting the FRED API.
-        """
+        """Hit FRED API and archive the response to MinIO."""
         from datetime import UTC
         from datetime import datetime as dt
 
