@@ -4,6 +4,11 @@ These tests run against a real Postgres database (the same one Docker
 Compose spins up). Each test runs in its own transaction that is rolled
 back at the end, so they leave no trace.
 
+Although the persistence layer takes FRED-specific Pydantic models as
+input, it now writes to the unified economic_* tables. The tests assert
+on those tables directly to verify the mapping behaviour, including
+that FRED-specific fields land in the JSONB extra_metadata columns.
+
 Mark all tests in this module with `integration` so we can selectively
 skip them in fast feedback loops:
 
@@ -21,7 +26,11 @@ from sqlalchemy.orm import Session
 
 from argos.ingestion.fred.models import Observation, Series
 from argos.ingestion.fred.persistence import upsert_observations, upsert_series
-from argos.storage.models.fred import FredObservation, FredSeries
+from argos.storage.models.economic import (
+    DataSource,
+    EconomicObservation,
+    EconomicSeries,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -61,26 +70,67 @@ def _make_observation(
     )
 
 
+def _select_series(session: Session, series_id: str) -> EconomicSeries:
+    """Helper: fetch a FRED-sourced series row by ID."""
+    return session.execute(
+        select(EconomicSeries).where(
+            EconomicSeries.source == DataSource.FRED,
+            EconomicSeries.series_id == series_id,
+        )
+    ).scalar_one()
+
+
+def _select_observations(session: Session, series_id: str) -> list[EconomicObservation]:
+    """Helper: fetch all FRED-sourced observations for a series, ordered by date."""
+    return list(
+        session.execute(
+            select(EconomicObservation)
+            .where(
+                EconomicObservation.source == DataSource.FRED,
+                EconomicObservation.series_id == series_id,
+            )
+            .order_by(EconomicObservation.observation_date)
+        )
+        .scalars()
+        .all()
+    )
+
+
 # ============================================================
 # Series upsert tests
 # ============================================================
 
 
 class TestUpsertSeries:
-    """Verify FredSeries upsert behaviour."""
+    """Verify EconomicSeries upsert behaviour for FRED-sourced data."""
 
     def test_inserts_new_series(self, db_session: Session) -> None:
-        """A series that does not yet exist is created."""
+        """A series that does not yet exist is created with source='fred'."""
         series = _make_series("NEW_SERIES")
 
         upsert_series(db_session, series)
         db_session.flush()
 
-        result = db_session.execute(
-            select(FredSeries).where(FredSeries.series_id == "NEW_SERIES")
-        ).scalar_one()
+        result = _select_series(db_session, "NEW_SERIES")
+        assert result.source == DataSource.FRED
         assert result.title == "Test Series"
         assert result.frequency == "Quarterly"
+
+    def test_fred_specific_fields_land_in_metadata(self, db_session: Session) -> None:
+        """Fields without a first-class column are preserved in extra_metadata."""
+        series = _make_series("METADATA_TEST")
+
+        upsert_series(db_session, series)
+        db_session.flush()
+
+        result = _select_series(db_session, "METADATA_TEST")
+        meta = result.extra_metadata
+        assert meta["frequency_short"] == "Q"
+        assert meta["units_short"] == "Index"
+        assert meta["seasonal_adjustment_short"] == "NSA"
+        assert meta["observation_start"] == "2020-01-01"
+        assert meta["observation_end"] == "2025-01-01"
+        assert meta["notes"] is None
 
     def test_updates_existing_series(self, db_session: Session) -> None:
         """Re-running upsert with a changed title updates the row."""
@@ -93,9 +143,7 @@ class TestUpsertSeries:
         upsert_series(db_session, series_v2)
         db_session.flush()
 
-        result = db_session.execute(
-            select(FredSeries).where(FredSeries.series_id == "CHANGING_SERIES")
-        ).scalar_one()
+        result = _select_series(db_session, "CHANGING_SERIES")
         assert result.title == "New Title"
 
     def test_idempotent_repeated_upsert(self, db_session: Session) -> None:
@@ -106,10 +154,13 @@ class TestUpsertSeries:
             upsert_series(db_session, series)
         db_session.flush()
 
-        count = db_session.execute(
-            select(FredSeries).where(FredSeries.series_id == "IDEMPOTENT")
+        rows = db_session.execute(
+            select(EconomicSeries).where(
+                EconomicSeries.source == DataSource.FRED,
+                EconomicSeries.series_id == "IDEMPOTENT",
+            )
         ).all()
-        assert len(count) == 1
+        assert len(rows) == 1
 
 
 # ============================================================
@@ -118,7 +169,7 @@ class TestUpsertSeries:
 
 
 class TestUpsertObservations:
-    """Verify FredObservation upsert behaviour."""
+    """Verify EconomicObservation upsert behaviour for FRED-sourced data."""
 
     def test_inserts_observations(self, db_session: Session) -> None:
         """A batch of new Observations gets persisted."""
@@ -134,19 +185,28 @@ class TestUpsertObservations:
 
         assert n == 3
 
-        rows = (
-            db_session.execute(
-                select(FredObservation)
-                .where(FredObservation.series_id == "OBS_TEST")
-                .order_by(FredObservation.observation_date)
-            )
-            .scalars()
-            .all()
-        )
+        rows = _select_observations(db_session, "OBS_TEST")
 
         assert len(rows) == 3
         assert rows[0].value == Decimal("100.0")
         assert rows[2].value == Decimal("103.0")
+        assert all(row.source == DataSource.FRED for row in rows)
+
+    def test_realtime_fields_land_in_metadata(self, db_session: Session) -> None:
+        """FRED revision vintage fields are preserved in extra_metadata."""
+        upsert_series(db_session, _make_series("VINTAGE_TEST"))
+        upsert_observations(
+            db_session,
+            "VINTAGE_TEST",
+            [_make_observation(date(2024, 1, 1), Decimal("100.0"))],
+        )
+        db_session.flush()
+
+        rows = _select_observations(db_session, "VINTAGE_TEST")
+        assert len(rows) == 1
+        meta = rows[0].extra_metadata
+        assert meta["realtime_start"] == "2025-01-01"
+        assert meta["realtime_end"] == "9999-12-31"
 
     def test_revision_updates_existing_values(self, db_session: Session) -> None:
         """When FRED revises a data point, our upsert reflects the new value.
@@ -171,13 +231,8 @@ class TestUpsertObservations:
         )
         db_session.flush()
 
-        result = db_session.execute(
-            select(FredObservation).where(
-                FredObservation.series_id == "REVISION_TEST",
-                FredObservation.observation_date == date(2024, 1, 1),
-            )
-        ).scalar_one()
-        assert result.value == Decimal("105.7")
+        rows = _select_observations(db_session, "REVISION_TEST")
+        assert rows[0].value == Decimal("105.7")
 
     def test_empty_batch_returns_zero(self, db_session: Session) -> None:
         """Empty observation list is a valid no-op."""
@@ -199,10 +254,8 @@ class TestUpsertObservations:
         )
         db_session.flush()
 
-        result = db_session.execute(
-            select(FredObservation).where(FredObservation.series_id == "NULL_TEST")
-        ).scalar_one()
-        assert result.value is None
+        rows = _select_observations(db_session, "NULL_TEST")
+        assert rows[0].value is None
 
 
 # ============================================================
@@ -223,26 +276,12 @@ class TestCascadeBehaviour:
         )
         db_session.flush()
 
-        before = (
-            db_session.execute(
-                select(FredObservation).where(FredObservation.series_id == "CASCADE_TEST")
-            )
-            .scalars()
-            .all()
-        )
+        before = _select_observations(db_session, "CASCADE_TEST")
         assert len(before) == 1
 
-        series_obj = db_session.execute(
-            select(FredSeries).where(FredSeries.series_id == "CASCADE_TEST")
-        ).scalar_one()
+        series_obj = _select_series(db_session, "CASCADE_TEST")
         db_session.delete(series_obj)
         db_session.flush()
 
-        after = (
-            db_session.execute(
-                select(FredObservation).where(FredObservation.series_id == "CASCADE_TEST")
-            )
-            .scalars()
-            .all()
-        )
+        after = _select_observations(db_session, "CASCADE_TEST")
         assert len(after) == 0

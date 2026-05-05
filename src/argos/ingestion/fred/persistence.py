@@ -1,11 +1,14 @@
 """Persistence layer for FRED data.
 
 Takes validated Pydantic models from the FRED client and writes them
-to Postgres using upsert semantics (INSERT ... ON CONFLICT UPDATE).
+to the unified economic_* tables in Postgres using upsert semantics
+(INSERT ... ON CONFLICT UPDATE).
 
-This is where the `ingestion` package and the `storage` package meet:
-the former knows how to talk to FRED, the latter knows how to talk
-to Postgres, and this module bridges the two.
+This module bridges the ingestion package (which knows how to talk to
+FRED) and the storage package (which knows how to talk to Postgres).
+The public API takes FRED-specific Pydantic models but writes to the
+provider-agnostic economic_series / economic_observations tables,
+mapping FRED-specific fields into the JSONB extra_metadata columns.
 """
 
 from __future__ import annotations
@@ -15,7 +18,11 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from argos.storage.models.fred import FredObservation, FredSeries
+from argos.storage.models.economic import (
+    DataSource,
+    EconomicObservation,
+    EconomicSeries,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -24,39 +31,47 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_SOURCE = DataSource.FRED
+
 
 def upsert_series(session: Session, series: Series) -> None:
-    """Insert or update a FRED series in the database.
+    """Insert or update a FRED series in the unified economic_series table.
 
     Uses Postgres INSERT ... ON CONFLICT DO UPDATE so that re-running
-    ingestion on an already-persisted series refreshes the metadata and
-    bumps 'last_ingested_at' without raising duplicate-key errors.
+    ingestion on an already-persisted series refreshes the metadata
+    without raising duplicate-key errors. FRED-specific fields that
+    don't have a first-class home in the unified schema are folded
+    into the JSONB extra_metadata columns.
 
     Args:
         session: Active SQLAlchemy session. The caller is responsible
             for commit/rollback.
         series: Validated Pydantic Series from the FRED API.
     """
+    extra_metadata = {
+        "notes": series.notes,
+        "frequency_short": series.frequency_short,
+        "units_short": series.units_short,
+        "seasonal_adjustment_short": series.seasonal_adjustment_short,
+        "observation_start": series.observation_start.isoformat(),
+        "observation_end": series.observation_end.isoformat(),
+    }
 
     values = {
+        "source": _SOURCE,
         "series_id": series.id,
         "title": series.title,
         "frequency": series.frequency,
-        "frequency_short": series.frequency_short,
         "units": series.units,
-        "units_short": series.units_short,
         "seasonal_adjustment": series.seasonal_adjustment,
-        "seasonal_adjustment_short": series.seasonal_adjustment_short,
-        "notes": series.notes,
-        "observation_start": series.observation_start,
-        "observation_end": series.observation_end,
         "last_updated": series.last_updated,
+        "extra_metadata": extra_metadata,
     }
 
-    stmt = pg_insert(FredSeries).values(**values)
+    stmt = pg_insert(EconomicSeries).values(**values)
     stmt = stmt.on_conflict_do_update(
-        index_elements=["series_id"],
-        set_={k: v for k, v in values.items() if k != "series_id"},
+        index_elements=["source", "series_id"],
+        set_={k: v for k, v in values.items() if k not in ("source", "series_id")},
     )
     session.execute(stmt)
     logger.debug("Upserted FRED series %s", series.id)
@@ -68,6 +83,11 @@ def upsert_observations(
     observations: list[Observation],
 ) -> int:
     """Bulk insert or update FRED observations for a series.
+
+    FRED revision metadata (realtime_start and realtime_end) is preserved
+    in the JSONB extra_metadata column for audit/reconstruction. The
+    'status' column is left NULL because FRED does not expose a status
+    field (it's an ECB/SDMX concept).
 
     Args:
         session: Active SQLAlchemy session. The caller is responsible
@@ -83,22 +103,26 @@ def upsert_observations(
 
     rows = [
         {
+            "source": _SOURCE,
             "series_id": series_id,
             "observation_date": obs.date,
             "value": obs.value,
-            "realtime_start": obs.realtime_start,
-            "realtime_end": obs.realtime_end,
+            "status": None,
+            "extra_metadata": {
+                "realtime_start": obs.realtime_start.isoformat(),
+                "realtime_end": obs.realtime_end.isoformat(),
+            },
         }
         for obs in observations
     ]
 
-    stmt = pg_insert(FredObservation).values(rows)
+    stmt = pg_insert(EconomicObservation).values(rows)
     stmt = stmt.on_conflict_do_update(
-        index_elements=["series_id", "observation_date"],
+        index_elements=["source", "series_id", "observation_date"],
         set_={
             "value": stmt.excluded.value,
-            "realtime_start": stmt.excluded.realtime_start,
-            "realtime_end": stmt.excluded.realtime_end,
+            "status": stmt.excluded.status,
+            "extra_metadata": stmt.excluded.extra_metadata,
         },
     )
     session.execute(stmt)
