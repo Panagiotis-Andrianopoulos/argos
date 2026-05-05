@@ -28,6 +28,15 @@ The Greek real estate market is sensitive to macroeconomic forces — interest r
 
 _High-level data flow: ingestion → storage → transformation → ML → serving._
 
+### Data layer
+
+ARGOS persists time-series observations to a **provider-agnostic** schema. Rather than separate tables per source, all upstream data lands in two unified tables:
+
+- **`economic_series`** — one row per series, keyed on `(source, series_id)`. Core columns capture concepts every provider exposes (title, frequency, units, seasonal adjustment, last-updated timestamp). Provider-specific fields are preserved in a JSONB `extra_metadata` column.
+- **`economic_observations`** — one row per `(source, series_id, observation_date)`. Holds the value, an optional status (e.g. `provisional` for SDMX sources), and JSONB metadata for revision/vintage information.
+
+Adding a new data source means: adding one enum value to `DataSource`, writing source-specific Pydantic models for the API response, writing a thin persistence module that maps those models to the unified tables, and an Airflow DAG that orchestrates the fetch-archive-persist flow. No schema migrations needed.
+
 ## Tech stack
 
 | Layer | Technology |
@@ -109,11 +118,12 @@ uv run pytest
 - [x] FRED API client with retry logic and Pydantic validation
 - [x] S3-compatible object storage layer with date-partitioned snapshots
 - [x] Postgres persistence with idempotent upserts (ON CONFLICT DO UPDATE)
+- [x] Provider-agnostic schema (`economic_series`, `economic_observations`) with JSONB metadata for source-specific fields
 - [x] Apache Airflow 3.2 orchestration with scheduled monthly DAG
-- [x] 39 tests (unit + integration) running against real Postgres in CI
+- [x] 41 tests (unit + integration) running against real Postgres in CI
 
 ### In progress
-- [ ] Bank of Greece ingestion (via ECB Data Portal)
+- [ ] ECB Data Portal ingestion (residential property price indices for Greece, sourced from BIS, Bank of Greece, and Eurostat aggregates)
 - [ ] Eurostat ingestion for EU-wide context
 
 ### Planned
