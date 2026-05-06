@@ -129,6 +129,13 @@ class Settings(BaseSettings):
         description="Base URL του FRED API.",
     )
 
+    # --- ECB Data Portal API ---
+    # No authentication required; the ECB Data Portal is fully public.
+    ecb_base_url: str = Field(
+        default="https://data-api.ecb.europa.eu/service",
+        description="Base URL of the ECB Data Portal API (SDMX REST endpoint).",
+    )
+
     # --- Nested groups ---
     scraper: ScraperSettings = Field(default_factory=ScraperSettings)
 

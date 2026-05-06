@@ -27,6 +27,7 @@ def make_http_client(
     *,
     user_agent: str = "ARGOS-Bot/0.1",
     base_url: str = "",
+    accept: str = "application/json",
     timeout: httpx.Timeout = DEFAULT_TIMEOUT,
 ) -> httpx.Client:
     """Creates a configured httpx.Client.
@@ -34,6 +35,8 @@ def make_http_client(
     Args:
         user_agent: User-Agent header for all requests.
         base_url: Optional base URL for relative paths.
+        accept: Accept header. Defaults to JSON; pass 'text/csv' for
+            CSV-returning APIs (e.g. ECB Data Portal).
         timeout: Custom timeouts.
 
     Returns:
@@ -42,7 +45,7 @@ def make_http_client(
     """
     headers = {
         "User-Agent": user_agent,
-        "Accept": "application/json",
+        "Accept": accept,
     }
     return httpx.Client(
         base_url=base_url,
