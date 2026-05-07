@@ -26,6 +26,7 @@ import logging
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Self
 
+from argos.ingestion.ecb.models import EcbObservation, EcbSeries
 from argos.ingestion.fred.models import Observation, Series
 from argos.storage import paths
 from argos.storage.object_store import ObjectStore
@@ -134,6 +135,71 @@ class RawDataWriter:
         )
         return key
 
+    # ============================================================
+    # ECB persistence
+    # ============================================================
+
+    def save_ecb_series(
+        self,
+        series: EcbSeries,
+        *,
+        snapshot_date: date | None = None,
+    ) -> str:
+        """Save an ECB series metadata snapshot.
+
+        Args:
+            series: The validated ECB series model.
+            snapshot_date: The date to partition by. Defaults to today UTC.
+
+        Returns:
+            The S3 key under which the snapshot was stored.
+        """
+        snapshot_date = snapshot_date or datetime.now(UTC).date()
+        key = paths.ecb_series_metadata_key(series.key, snapshot_date=snapshot_date)
+
+        payload = series.model_dump(mode="json")
+        body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+        self._store.put(body, key=key, content_type=JSON_CONTENT_TYPE)
+        logger.info("Saved ECB series %s to %s", series.key, key)
+        return key
+
+    def save_ecb_observations(
+        self,
+        series_key: str,
+        observations: list[EcbObservation],
+        *,
+        snapshot_date: date | None = None,
+    ) -> str:
+        """Save an ECB observations snapshot.
+
+        Args:
+            series_key: The full ECB series key this batch belongs to.
+            observations: The list of validated observations.
+            snapshot_date: The date to partition by. Defaults to today UTC.
+
+        Returns:
+            The S3 key under which the snapshot was stored.
+        """
+        snapshot_date = snapshot_date or datetime.now(UTC).date()
+        key = paths.ecb_observations_key(series_key, snapshot_date=snapshot_date)
+
+        payload = {
+            "series_key": series_key,
+            "count": len(observations),
+            "observations": [obs.model_dump(mode="json") for obs in observations],
+        }
+        body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+        self._store.put(body, key=key, content_type=JSON_CONTENT_TYPE)
+        logger.info(
+            "Saved %d ECB observations for %s to %s",
+            len(observations),
+            series_key,
+            key,
+        )
+        return key
+
 
 class RawDataReader:
     """Reads raw API snapshots back from the object store.
@@ -196,3 +262,42 @@ class RawDataReader:
         body = self._store.get(key)
         payload = json.loads(body.decode("utf-8"))
         return [Observation.model_validate(obs) for obs in payload["observations"]]
+
+    # ============================================================
+    # ECB retrieval
+    # ============================================================
+
+    def load_ecb_series(self, series_key: str, *, snapshot_date: date) -> EcbSeries:
+        """Load an ECB series metadata snapshot from storage.
+
+        Args:
+            series_key: The full ECB series key.
+            snapshot_date: The snapshot date to load.
+
+        Returns:
+            The validated EcbSeries model.
+        """
+        key = paths.ecb_series_metadata_key(series_key, snapshot_date=snapshot_date)
+        body = self._store.get(key)
+        data = json.loads(body.decode("utf-8"))
+        return EcbSeries.model_validate(data)
+
+    def load_ecb_observations(
+        self,
+        series_key: str,
+        *,
+        snapshot_date: date,
+    ) -> list[EcbObservation]:
+        """Load an ECB observations snapshot from storage.
+
+        Args:
+            series_key: The full ECB series key.
+            snapshot_date: The snapshot date to load.
+
+        Returns:
+            A list of validated EcbObservation models.
+        """
+        key = paths.ecb_observations_key(series_key, snapshot_date=snapshot_date)
+        body = self._store.get(key)
+        payload = json.loads(body.decode("utf-8"))
+        return [EcbObservation.model_validate(obs) for obs in payload["observations"]]

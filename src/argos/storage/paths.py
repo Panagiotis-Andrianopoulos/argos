@@ -28,6 +28,7 @@ PROCESSED_PREFIX = "processed"
 # ============================================================
 
 SOURCE_FRED = "fred"
+SOURCE_ECB = "ecb"
 
 # ============================================================
 # FRED key builders
@@ -95,3 +96,63 @@ def fred_observations_prefix(series_id: str | None = None) -> str:
     if series_id is None:
         return base
     return f"{base}{series_id}/"
+
+
+# ============================================================
+# ECB key builders
+# ============================================================
+
+
+def ecb_series_metadata_key(series_key: str, *, snapshot_date: date) -> str:
+    """Build the key for an ECB series metadata request.
+
+    Args:
+        series_key: The full ECB series key, e.g.
+            "RESR.Q.GR._T.N.RTF.TVAL.GR2.TB.N.IX".
+        snapshot_date: The date of the snapshot.
+
+    Returns:
+        The full S3 key, e.g.
+        "raw/ecb/series/RESR.Q.GR._T.N.RTF.TVAL.GR2.TB.N.IX/2026-05-05/metadata.json".
+    """
+    return (
+        f"{RAW_PREFIX}/{SOURCE_ECB}/series/"
+        f"{series_key}/{snapshot_date.isoformat()}/metadata.json"
+    )
+
+
+def ecb_observations_key(series_key: str, *, snapshot_date: date) -> str:
+    """Build the key for ECB observations snapshots."""
+    return (
+        f"{RAW_PREFIX}/{SOURCE_ECB}/observations/"
+        f"{series_key}/{snapshot_date.isoformat()}/observations.json"
+    )
+
+
+def ecb_series_prefix(series_key: str | None = None) -> str:
+    """Build the prefix to list all ECB series snapshots.
+
+    Args:
+        series_key: Optiona. If provided, restrict to a single series.
+
+    Returns:
+        A prefix suitable for 'ObjectStore.list_keys()'.
+
+    Examples:
+        >>> ecb_series_prefix()
+        'raw/ecb/series/'
+        >>> ecb_series_prefix("RESR.Q.GR._T.N.RTF.TVAL.GR2.TB.N.IX")
+        'raw/ecb/series/RESR.Q.GR._T.N.RTF.TVAL.GR2.TB.N.IX/'
+    """
+    base = f"{RAW_PREFIX}/{SOURCE_ECB}/series/"
+    if series_key is None:
+        return base
+    return f"{base}{series_key}/"
+
+
+def ecb_observations_prefix(series_key: str | None = None) -> str:
+    """Build the prefix to list all ECB observations snapshots."""
+    base = f"{RAW_PREFIX}/{SOURCE_ECB}/observations/"
+    if series_key is None:
+        return base
+    return f"{base}{series_key}/"
