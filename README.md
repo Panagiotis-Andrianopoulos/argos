@@ -17,7 +17,7 @@ The Greek real estate market is sensitive to macroeconomic forces — interest r
 
 ## What it does
 
-- **Ingests** quarterly economic indicators from FRED (BIS-sourced Greek property indices), Bank of Greece (residential & commercial price indices, mortgage rates), and Eurostat (EU-wide context)
+- **Ingests** quarterly economic indicators from FRED (BIS-sourced Greek property indices) and the ECB Data Portal (Greek property indices from BIS, Bank of Greece, and Eurostat aggregates), with Eurostat direct ingestion for EU-wide context planned
 - **Archives** raw API responses to S3-compatible object storage for replay and provenance
 - **Persists** typed observations to Postgres with idempotent upserts
 - **Orchestrates** the pipeline via Apache Airflow with monthly schedules and exponential-backoff retries
@@ -120,11 +120,12 @@ uv run pytest
 - [x] Postgres persistence with idempotent upserts (ON CONFLICT DO UPDATE)
 - [x] Provider-agnostic schema (`economic_series`, `economic_observations`) with JSONB metadata for source-specific fields
 - [x] Apache Airflow 3.2 orchestration with scheduled monthly DAG
-- [x] 41 tests (unit + integration) running against real Postgres in CI
+- [x] FRED ingestion: BIS-sourced Greek residential property price index, monthly cadence
+- [x] ECB Data Portal ingestion: SDMX REST API with CSV parsing, Greek RESR series ingested from 2006 to present
+- [x] 94 tests (unit + integration) running against real Postgres in CI
 
 ### In progress
-- [ ] ECB Data Portal ingestion (residential property price indices for Greece, sourced from BIS, Bank of Greece, and Eurostat aggregates)
-- [ ] Eurostat ingestion for EU-wide context
+- [ ] Eurostat ingestion for EU-wide context (HICP, mortgage rates, construction costs)
 
 ### Planned
 - [ ] dbt transformations to feature-engineered datasets
